@@ -1,0 +1,48 @@
+---
+description: Project context, toolchain, and conventions for distributed-deque
+alwaysApply: true
+---
+
+# distributed-deque — agent memory
+
+Read `AGENTS.md` at the repo root for the full, maintained summary.
+
+## What this is
+
+Go library: **distributed deque** backed by **Redis**. One `Deque` interface; two engines — **ListDeque** (Lists, ephemeral, low latency) and **StreamDeque** (Streams, durable, ack-aware). See `README.md` for architecture, multi-region, and production notes.
+
+- **Module:** `github.com/williamntlam/distributed-deque`
+- **Package name:** `distributeddeque`
+
+## Implementation status
+
+| Area | Status |
+|------|--------|
+| `README.md` | Design doc (source of truth for API goals) |
+| `errors.go` | Done: `ErrEmpty`, `ErrClosed`; helpers `isEmpty` / `isClosed` (package-private) |
+| `deque.go`, `config.go`, `list/`, `stream/`, etc. | Not implemented yet (stubs / missing) |
+| Roadmap | `ErrReadOnly`, `ErrTimeout`, `context.Context` on ops, health helper |
+
+## Error semantics
+
+- **`ErrEmpty`** — non-blocking pop/shift when deque has no elements (client still usable).
+- **`ErrClosed`** — client shut down (e.g. after `Close()`); ops rejected until a new client is created.
+- Distinguish from Redis/network errors and `context` cancellation in implementations.
+
+## Toolchain (important)
+
+- **`go.mod` currently:** `go 1.26` (requires matching toolchain).
+- User env: **Ubuntu 24.04 WSL**; may have **apt** `golang-go` → 1.22 at `/usr/bin/go` and/or **`/usr/local/go`** for newer Go.
+- `go mod tidy` fails with `toolchain not available` when `go.mod` version > installed `go version` — align `go` line with `go version`, or install Go (apt: `golang-1.24-go`; official: `go*.linux-amd64.tar.gz` to `/usr/local/go`, not `.src.tar.gz`).
+- Put `/usr/local/go/bin` **before** `/usr/bin/go` on `PATH` when using tarball install.
+- Never commit `go*.tar.gz` in the repo root.
+
+## Dependencies
+
+- `github.com/redis/go-redis/v9` (in `go.mod`)
+
+## Working agreements
+
+- Prefer small, focused diffs; match README naming and architecture.
+- Do not create git commits unless the user asks.
+- Update this rule and `AGENTS.md` when major project facts change (Go version, package layout, error API).

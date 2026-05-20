@@ -1,0 +1,14 @@
+# Go toolchain downloads (do not commit)
+go*.tar.gz
+go*.zip
+
+# Build / test
+/bin/
+/dist/
+*.test
+coverage.out
+
+# IDE
+.idea/
+*.swp
+*~
