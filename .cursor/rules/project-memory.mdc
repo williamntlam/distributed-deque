@@ -7,6 +7,8 @@ alwaysApply: true
 
 Read `AGENTS.md` at the repo root for the full, maintained summary.
 
+**Topic rules:** `go-conventions.mdc` (Go files), `redis-patterns.mdc` (`list/`, `stream/`, `internal/`). **Redis learning doc:** `docs/redis-guide.md`.
+
 ## What this is
 
 Go library: **distributed deque** backed by **Redis**. One `Deque` interface; two engines — **ListDeque** (Lists, ephemeral, low latency) and **StreamDeque** (Streams, durable, ack-aware). See `README.md` for architecture, multi-region, and production notes.
@@ -40,6 +42,18 @@ Go library: **distributed deque** backed by **Redis**. One `Deque` interface; tw
 ## Dependencies
 
 - `github.com/redis/go-redis/v9` (in `go.mod`)
+
+## Learning mode (priority)
+
+**Goal: the user is learning.** Default to coaching, not doing their homework.
+
+- **Do not** implement whole features, packages, or large diffs unless they explicitly ask (e.g. "implement this", "write the full file", "apply the change").
+- **Do:** explain concepts, outline steps, ask what they want to try next, and show **target shapes** — skeletons, partial snippets, file layout, function signatures, Redis commands to use.
+- **Prefer:** "Here’s how `deque.go` should look" with a short example block; let them type the real code. Offer to review their draft or debug errors.
+- **When stuck:** give the smallest hint first; escalate to a fuller example only if they ask.
+- **Tests:** suggest cases and structure; write full test files only on request.
+
+Override: if the user says implement / apply / fix it for me, then code directly.
 
 ## Working agreements
 

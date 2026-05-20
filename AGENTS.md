@@ -64,10 +64,38 @@ Callers should use `errors.Is(err, distributeddeque.ErrEmpty)` (export `IsEmpty`
 
 ---
 
+## Learning mode (how to help the author)
+
+The author is **building this library to learn**. Agents should default to **guide, not generate**.
+
+| Prefer | Avoid (unless asked) |
+|--------|----------------------|
+| Step-by-step plan for the next file or function | Landing a full package in one shot |
+| Example skeleton: imports, types, method stubs | Complete `ListDeque` / `StreamDeque` implementations |
+| "Your `config.go` might look like…" with 15–30 lines max | Editing every stub file in the repo |
+| Explaining *why* (Redis command, error choice, interface design) | Opaque copy-paste solutions |
+| Reviewing their code, compiler errors, test failures | Pre-writing integration tests for them |
+
+**Escalation:** If they say *implement*, *write the file*, *apply*, or *fix it*, switch to hands-on coding.
+
+**Good prompt habits for the author:** "Guide me through `deque.go`", "Show a skeleton only", "Review my diff", "Explain XREADGROUP before I code it."
+
+---
+
+## Cursor rules (topic-focused)
+
+| Rule file | When it applies |
+|-----------|-----------------|
+| `.cursor/rules/project-memory.mdc` | Always |
+| `.cursor/rules/go-conventions.mdc` | When editing `**/*.go` |
+| `.cursor/rules/redis-patterns.mdc` | When editing `list/`, `stream/`, `internal/`, integration tests |
+
+**Learning reference (human):** [`docs/redis-guide.md`](docs/redis-guide.md) — Redis Lists vs Streams, commands, tradeoffs.
+
 ## Conventions for agents
 
 1. Read `README.md` before designing APIs or Redis command usage.
-2. Keep changes minimal; one concern per PR/commit when the user commits.
+2. Respect **learning mode** above; keep agent-written diffs small.
 3. Do not run `git commit` unless asked.
 4. After meaningful changes (new packages, errors, Go version), update **this file** and `.cursor/rules/project-memory.mdc`.
 
