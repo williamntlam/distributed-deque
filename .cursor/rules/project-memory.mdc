@@ -7,11 +7,11 @@ alwaysApply: true
 
 Read `AGENTS.md` at the repo root for the full, maintained summary.
 
-**Topic rules:** `go-conventions.mdc` (Go files), `redis-patterns.mdc` (`list/`, `stream/`, `internal/`). **Redis learning doc:** `docs/redis-guide.md`.
+**Topic rules:** `go-conventions.mdc` (Go files), `memory-patterns.mdc` (`memory/`, `remote/`, `cmd/`, tests). **Learning doc:** `docs/deque-guide.md`.
 
 ## What this is
 
-Go library: **distributed deque** backed by **Redis**. One `Deque` interface; two engines — **ListDeque** (Lists, ephemeral, low latency) and **StreamDeque** (Streams, durable, ack-aware). See `README.md` for architecture, multi-region, and production notes.
+Go library: **deque** with **in-memory doubly-linked list** first (`MemoryDeque`: nodes + `head`/`tail` + mutex, O(1) both ends). **Distributed** = optional **`RemoteDeque`** client to a queue server that owns the only `MemoryDeque`. Redis is **not** v1 scope. See `README.md`.
 
 - **Module:** `github.com/williamntlam/distributed-deque`
 - **Package name:** `distributeddeque`
@@ -20,16 +20,16 @@ Go library: **distributed deque** backed by **Redis**. One `Deque` interface; tw
 
 | Area | Status |
 |------|--------|
-| `README.md` | Design doc (source of truth for API goals) |
+| `README.md` | Design doc (in-memory first, remote optional) |
 | `errors.go` | Done: `ErrEmpty`, `ErrClosed`; helpers `isEmpty` / `isClosed` (package-private) |
-| `deque.go`, `config.go`, `list/`, `stream/`, etc. | Not implemented yet (stubs / missing) |
-| Roadmap | `ErrReadOnly`, `ErrTimeout`, `context.Context` on ops, health helper |
+| `deque.go`, `config.go`, `memory/`, `remote/`, etc. | Not implemented yet (stubs / missing) |
+| Roadmap | `ErrReadOnly`, `ErrTimeout`, `context.Context` on ops, blocking pop |
 
 ## Error semantics
 
-- **`ErrEmpty`** — non-blocking pop/shift when deque has no elements (client still usable).
+- **`ErrEmpty`** — non-blocking pop when deque has no elements (client still usable).
 - **`ErrClosed`** — client shut down (e.g. after `Close()`); ops rejected until a new client is created.
-- Distinguish from Redis/network errors and `context` cancellation in implementations.
+- Distinguish from HTTP/network errors and `context` cancellation in `RemoteDeque`.
 
 ## Toolchain (important)
 
@@ -41,15 +41,15 @@ Go library: **distributed deque** backed by **Redis**. One `Deque` interface; tw
 
 ## Dependencies
 
-- `github.com/redis/go-redis/v9` (in `go.mod`)
+- **v1:** standard library only (no Redis client required for core path).
 
 ## Learning mode (priority)
 
 **Goal: the user is learning.** Default to coaching, not doing their homework.
 
 - **Do not** implement whole features, packages, or large diffs unless they explicitly ask (e.g. "implement this", "write the full file", "apply the change").
-- **Do:** explain concepts, outline steps, ask what they want to try next, and show **target shapes** — skeletons, partial snippets, file layout, function signatures, Redis commands to use.
-- **Prefer:** "Here’s how `deque.go` should look" with a short example block; let them type the real code. Offer to review their draft or debug errors.
+- **Do:** explain concepts, outline steps, ask what they want to try next, and show **target shapes** — skeletons, partial snippets, file layout, function signatures.
+- **Prefer:** "Here's how `memory/deque.go` should look" with a short example block; let them type the real code. Offer to review their draft or debug errors.
 - **When stuck:** give the smallest hint first; escalate to a fuller example only if they ask.
 - **Tests:** suggest cases and structure; write full test files only on request.
 

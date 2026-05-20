@@ -1,0 +1,48 @@
+---
+description: In-memory deque patterns for MemoryDeque and RemoteDeque client
+globs: "memory/**/*.go,remote/**/*.go,cmd/**/*.go,test/**/*.go"
+alwaysApply: false
+---
+
+# Memory deque patterns — distributed-deque
+
+Deep dive for learning: **`docs/deque-guide.md`**. README is the product contract.
+
+Author is **learning** — explain mutex boundaries and distribution tradeoffs; avoid implementing whole packages unless asked.
+
+## MemoryDeque ↔ doubly-linked list + mutex
+
+| Go op | Implementation | Notes |
+|-------|----------------|-------|
+| `PushFront` | Lock; new node before `head` | O(1); update `head`, nil-safe empty list |
+| `PushBack` | Lock; new node after `tail` | O(1) |
+| `PopFront` | Lock; unlink `head` | Empty → `ErrEmpty`; fix `tail` if one node left |
+| `PopBack` | Lock; unlink `tail` | Symmetric |
+| `Len` | Lock; return `size` | Maintain on push/pop — do not walk list |
+| `Close` | Set closed flag; `ErrClosed` on ops | `sync.Once` or atomic |
+
+- **Why linked, not slice:** `PushFront` on a plain slice is O(n); deque needs O(1) both ends.
+- **Later:** ring buffer (circular slice + head/tail) — same O(1) ends, fewer allocs; swap internals after linked list ships.
+- **Atomicity:** hold one mutex for the whole push/pop/unlink.
+- **Concurrency:** many goroutines on one `MemoryDeque` — mutex serializes; each pop gets at most one element.
+- **Not distributed:** each process has its own instance unless using `RemoteDeque`.
+
+## RemoteDeque ↔ HTTP (planned)
+
+| Go op | HTTP (illustrative) | Notes |
+|-------|---------------------|-------|
+| `PushBack` | `POST` with body | Timeouts; retry only with idempotency |
+| `PopFront` | `GET` or `POST` pop | Map empty → `ErrEmpty`, not 500 |
+| Errors | Distinct from `ErrEmpty` | Connection refused ≠ empty deque |
+
+- Server process owns the **only** `MemoryDeque`.
+- Do not retry a pop blindly after timeout — delivery may be unknown.
+
+## Production habits (when implementing)
+
+- Pass **`context.Context`**; respect cancel on blocking waits.
+- After **`Close()`**, return `ErrClosed`.
+- Bound payload size; document whether returned `[]byte` is copied.
+- Use **`go test -race`** on memory package tests.
+
+When adding code, state **which lock**, **what error** (`ErrEmpty` vs `ErrClosed` vs wrap), and **whether** the deque is process-local or remote.

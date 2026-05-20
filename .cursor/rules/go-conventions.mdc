@@ -13,10 +13,10 @@ Author is **learning** — prefer skeletons and review over full implementations
 | Path | Package | Responsibility |
 |------|---------|----------------|
 | Root (`deque.go`, `config.go`, `errors.go`) | `distributeddeque` | Public `Deque` interface, config, shared errors |
-| `list/` | `list` | `ListDeque` — Redis Lists |
-| `stream/` | `stream` | `StreamDeque` — Redis Streams |
-| `internal/redis/` | `redis` (internal) | Shared client wiring, helpers — not imported by users |
-| `test/integration/` | `integration_test` | Redis required; build tag `integration` |
+| `memory/` | `memory` | `MemoryDeque` — doubly-linked list + mutex |
+| `remote/` | `remote` | `RemoteDeque` — HTTP client to queue server (planned) |
+| `cmd/queued/` | `main` | Optional queue server owning one `MemoryDeque` |
+| `test/integration/` | `integration_test` | Multi-client / HTTP tests; build tag `integration` |
 
 ## Interface shape (target)
 
@@ -31,30 +31,39 @@ type Deque interface {
 }
 ```
 
-- Every op takes **`context.Context`** first — cancellation must stop blocking Redis calls.
+- Every op takes **`context.Context`** first — cancellation must stop blocking waits.
 - Payload type **`[]byte`** until a generic or typed envelope is designed.
 
 ## Errors
 
-- Return **`ErrEmpty`** only for non-blocking pop on empty deque (map from Redis nil/empty, not from network failure).
+- Return **`ErrEmpty`** only for non-blocking pop on empty deque.
 - Return **`ErrClosed`** after `Close()`; guard with `sync.Once` or atomic flag on the struct.
-- Wrap Redis errors: `fmt.Errorf("list pop front: %w", err)` — callers use `errors.Is` for sentinels, not string match.
-- Do not conflate `context.Canceled`, `redis.Nil`, and `ErrEmpty`.
+- Wrap remote errors: `fmt.Errorf("remote pop front: %w", err)` — callers use `errors.Is` for sentinels, not string match.
+- Do not conflate `context.Canceled` and `ErrEmpty`.
 
-## go-redis
+## MemoryDeque
 
-- One **`redis.Client`** (or `UniversalClient`) per deque instance; configure via `config.go`.
-- Reuse connection pool — no `Dial` per operation.
-- Pass **`ctx`** into `LPop`, `BLPop`, `XAdd`, `XReadGroup`, etc.
+- **v1:** doubly-linked nodes (`prev`/`next`), `head`, `tail`, **`size`** for O(1) `Len` — not a plain slice (prepend is O(n)).
+- **Later optimization:** ring buffer backing — O(1) both ends, better locality; same public API.
+- `container/list` or a custom `node` struct — either is fine; keep mutex on the wrapper.
+- One **`sync.Mutex`** per deque; hold for whole push/pop/unlink.
+- No network I/O in `memory/` package.
+- Copy `[]byte` on pop if callers retain data after the node is unlinked.
+
+## RemoteDeque (when added)
+
+- HTTP client with timeouts; map empty response → `ErrEmpty`.
+- Do not retry pops blindly after timeout.
 
 ## Tests
 
-- **Unit:** mock Redis or miniredis where possible; table-driven `t.Run` cases.
-- **Integration:** `//go:build integration` — skip unless Redis is up; document in README/Makefile.
+- **Unit:** table-driven tests for empty, single element, both ends, `Close`.
+- **Race:** `go test -race ./memory/...`
+- **Integration:** `//go:build integration` — queue server + clients.
 - Name tests by behavior: `TestPopFront_EmptyReturnsErrEmpty`.
 
 ## Style
 
-- Match existing naming: `ListDeque`, `StreamDeque`, `NewListDeque`, `NewStreamDeque`.
+- Match naming: `MemoryDeque`, `NewMemoryDeque`, `RemoteDeque`, `NewRemoteDeque`.
 - Keep files small; one type per file is fine early on.
 - No `init()` side effects; explicit `New*` constructors.
