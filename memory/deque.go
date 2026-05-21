@@ -1,18 +1,12 @@
-package memory
+package distributeddeque
 
-import "sync"
+import "context"
 
-// MemoryDeque is an in-process deque backed by a doubly-linked list (see node.go).
-// Implement distributeddeque.Deque in this file when you are ready.
-type MemoryDeque struct {
-	mu     sync.Mutex
-	head   *node
-	tail   *node
-	size   int
-	closed bool
-}
-
-// NewMemoryDeque returns an empty deque.
-func NewMemoryDeque() *MemoryDeque {
-	return &MemoryDeque{}
+type Deque interface {
+	PushFront(ctx context.Context, value[]byte) error
+	PushBack(ctx context.Context, value[]byte) error
+	PopFront(ctx context.Context) ([]byte, error)
+	PopBack(ctx context.Context) ([]byte, error)
+	Len(ctx context.Context) (int64, error)
+	Close() error
 }
