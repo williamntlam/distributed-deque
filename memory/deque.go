@@ -1,12 +1,15 @@
-package distributeddeque
+package memory
 
-import "context"
+import "sync"
 
-type Deque interface {
-	PushFront(ctx context.Context, value[]byte) error
-	PushBack(ctx context.Context, value[]byte) error
-	PopFront(ctx context.Context) ([]byte, error)
-	PopBack(ctx context.Context) ([]byte, error)
-	Len(ctx context.Context) (int64, error)
-	Close() error
+type MemoryDeque struct {
+	mu sync.Mutex
+	head *node
+	tail *node
+	size int64
+	closed bool
+}
+
+func NewMemoryDeque() *MemoryDeque {
+	return &MemoryDeque{}
 }
