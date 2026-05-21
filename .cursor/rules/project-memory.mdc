@@ -16,14 +16,26 @@ Go library: **deque** with **in-memory doubly-linked list** first (`MemoryDeque`
 - **Module:** `github.com/williamntlam/distributed-deque`
 - **Package name:** `distributeddeque`
 
+## Repository layout (target)
+
+```
+errors.go, deque.go, config.go
+memory/node.go, memory/deque.go, memory/deque_test.go
+memory/ring.go (later)
+remote/deque.go, cmd/queued/main.go, test/integration/remote_deque_test.go (planned)
+```
+
+Doubly-linked list in `memory/` — **not** `list/` or `stream/`. See README **Repository layout**.
+
 ## Implementation status
 
 | Area | Status |
 |------|--------|
-| `README.md` | Design doc (in-memory first, remote optional) |
-| `errors.go` | Done: `ErrEmpty`, `ErrClosed`; helpers `isEmpty` / `isClosed` (package-private) |
-| `deque.go`, `config.go`, `memory/`, `remote/`, etc. | Not implemented yet (stubs / missing) |
-| Roadmap | `ErrReadOnly`, `ErrTimeout`, `context.Context` on ops, blocking pop |
+| `README.md` | Design + layout |
+| `errors.go` | Done |
+| `deque.go`, `memory/node.go`, `memory/deque.go` | Not started |
+| `memory/ring.go`, `remote/`, `cmd/queued/`, `test/integration/` | Planned / later |
+| Roadmap | `ErrReadOnly`, `ErrTimeout`, blocking pop |
 
 ## Error semantics
 

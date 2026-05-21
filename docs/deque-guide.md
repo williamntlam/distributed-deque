@@ -1,6 +1,8 @@
 # Deque guide for distributed-deque
 
-A learning-oriented reference for the **in-memory list** backend and how to grow it into a **distributed** deque. Pair with [`README.md`](../README.md) (design) and [`.cursor/rules/memory-patterns.mdc`](../.cursor/rules/memory-patterns.mdc) (agent hints).
+A learning-oriented reference for the **in-memory doubly-linked list** backend and how to grow it into a **distributed** deque. Pair with [`README.md`](../README.md) (design and **Repository layout**) and [`.cursor/rules/memory-patterns.mdc`](../.cursor/rules/memory-patterns.mdc) (agent hints).
+
+**Where code lives:** `memory/node.go` (nodes), `memory/deque.go` (`MemoryDeque`), tests in `memory/deque_test.go` — not under `list/` or `stream/`.
 
 ---
 
@@ -241,12 +243,14 @@ Optional: run a queue server and two worker CLIs in separate terminals once `cmd
 
 ## 10. Suggested learning path
 
-1. **Linked deque** — nodes, push/pop four ways, `Len` via `size`, unit tests.
-2. **`errors.go`** — `ErrEmpty` on empty pop; `ErrClosed` after `Close`.
-3. **Race test** — `-race` with concurrent push/pop.
-4. **Queue server** — one owner, HTTP API, manual `curl` tests.
-5. **`RemoteDeque`** — Go client wrapping HTTP.
-6. **Ring buffer** — reimplement `MemoryDeque` internals for O(1) ends with better locality.
-7. **(Later)** Optional external store backend if you outgrow the DIY server.
+1. **`errors.go`** — `ErrEmpty`, `ErrClosed`.
+2. **`deque.go`** — interface.
+3. **`memory/node.go`** — node + link helpers.
+4. **`memory/deque.go`** + **`memory/deque_test.go`** — four ops, `size`, mutex.
+5. **Race test** — `go test -race ./memory/...`.
+6. **`cmd/queued`** — queue server (one owner).
+7. **`remote/deque.go`** — HTTP client.
+8. **`test/integration/remote_deque_test.go`** — multi-client.
+9. **`memory/ring.go`** — ring-buffer optimization.
 
 Update [`AGENTS.md`](../AGENTS.md) when you complete each milestone.

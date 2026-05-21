@@ -1,12 +1,18 @@
 ---
 description: In-memory deque patterns for MemoryDeque and RemoteDeque client
-globs: "memory/**/*.go,remote/**/*.go,cmd/**/*.go,test/**/*.go"
+globs: "memory/**/*.go,remote/**/*.go,cmd/**/*.go,test/integration/**/*.go"
 alwaysApply: false
 ---
 
 # Memory deque patterns — distributed-deque
 
-Deep dive for learning: **`docs/deque-guide.md`**. README is the product contract.
+Deep dive: **`docs/deque-guide.md`**. File tree: README **Repository layout**.
+
+| File | Contents |
+|------|----------|
+| `memory/node.go` | `node`, link/unlink at head/tail |
+| `memory/deque.go` | `MemoryDeque`, mutex, `size`, four ops |
+| `memory/ring.go` | (later) ring buffer — same methods |
 
 Author is **learning** — explain mutex boundaries and distribution tradeoffs; avoid implementing whole packages unless asked.
 

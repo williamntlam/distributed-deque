@@ -32,13 +32,23 @@ Full design: [`README.md`](README.md). Learning doc: [`docs/deque-guide.md`](doc
 
 ## Code status
 
-Early implementation. Treat **README** as the API/design contract until types land in code.
+Early implementation. Treat **README** (including **Repository layout**) as the file contract until code lands.
 
 | File / area | Status |
 |-------------|--------|
-| `errors.go` | **Implemented** — `ErrEmpty`, `ErrClosed`; unexported `isEmpty` / `isClosed` |
-| `deque.go`, `config.go`, `memory/`, `remote/`, `cmd/`, examples, tests | **Not implemented** (stubs or absent) |
-| Ring-buffer `MemoryDeque` | **Later** — optimization after linked-list version |
+| `errors.go` | **Done** — `ErrEmpty`, `ErrClosed`; `isEmpty` / `isClosed` |
+| `deque.go` | **Scaffold** — `Deque` interface only |
+| `config.go` | **Scaffold** — empty `Config`; fill in for `RemoteDeque` |
+| `memory/node.go` | **Scaffold** — `node` type |
+| `memory/deque.go` | **Scaffold** — `MemoryDeque` fields + `NewMemoryDeque`; **you** implement ops |
+| `memory/deque_test.go` | **Scaffold** — empty test package |
+| `memory/ring.go` | **Placeholder** — ring-buffer optimization |
+| `remote/deque.go`, `remote/deque_test.go` | **Scaffold** — planned HTTP client |
+| `cmd/queued/main.go` | **Scaffold** — empty `main` |
+| `test/integration/remote_deque_test.go` | **Scaffold** — `integration` build tag |
+| `list/`, `stream/`, `internal/redis/` | **Do not create** |
+
+Full tree: see **Repository layout** in [`README.md`](README.md).
 
 ### Typed errors (current + planned)
 

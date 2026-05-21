@@ -10,13 +10,32 @@ Author is **learning** — prefer skeletons and review over full implementations
 
 ## Layout
 
+```
+errors.go, deque.go, config.go     → package distributeddeque (root)
+memory/node.go, memory/deque.go    → package memory (doubly-linked list)
+memory/deque_test.go               → unit tests beside implementation
+memory/ring.go                     → (later) ring-buffer optimization
+remote/deque.go                    → (planned) HTTP client
+cmd/queued/main.go                 → (planned) single owner of MemoryDeque
+test/integration/remote_deque_test.go → (planned) build tag integration
+```
+
 | Path | Package | Responsibility |
 |------|---------|----------------|
-| Root (`deque.go`, `config.go`, `errors.go`) | `distributeddeque` | Public `Deque` interface, config, shared errors |
-| `memory/` | `memory` | `MemoryDeque` — doubly-linked list + mutex |
-| `remote/` | `remote` | `RemoteDeque` — HTTP client to queue server (planned) |
-| `cmd/queued/` | `main` | Optional queue server owning one `MemoryDeque` |
-| `test/integration/` | `integration_test` | Multi-client / HTTP tests; build tag `integration` |
+| `errors.go` | `distributeddeque` | `ErrEmpty`, `ErrClosed`; helpers `isEmpty` / `isClosed` |
+| `deque.go` | `distributeddeque` | Public `Deque` interface |
+| `config.go` | `distributeddeque` | (planned) `RemoteDeque` URL, timeouts — not needed for memory-only v1 |
+| `memory/node.go` | `memory` | `node` struct (`value []byte`, `prev`, `next`); unlink/link helpers |
+| `memory/deque.go` | `memory` | `MemoryDeque` — `head`, `tail`, `size`, mutex; O(1) four ops + `Close` |
+| `memory/deque_test.go` | `memory` | Table-driven + `-race` tests |
+| `memory/ring.go` | `memory` | (later) ring buffer; same method set, different internals |
+| `remote/deque.go` | `remote` | (planned) `RemoteDeque` — HTTP to `cmd/queued` |
+| `cmd/queued/main.go` | `main` | (planned) only process holding canonical deque |
+| `test/integration/` | `integration_test` | (planned) HTTP / multi-client; tag `integration` |
+
+**Not used:** `list/`, `stream/`, `internal/redis/` (Redis-era layout).
+
+**Imports:** `memory` returns `distributeddeque.ErrEmpty` / `ErrClosed`; root must not import `memory` (avoid cycles). Callers: `memory.NewMemoryDeque()`.
 
 ## Interface shape (target)
 

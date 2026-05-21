@@ -152,15 +152,67 @@ Focused on what matters for the in-memory / queue-server track:
 
 ---
 
+## Repository layout
+
+Target tree for v1 (doubly-linked `MemoryDeque`). **No** `list/`, `stream/`, or Redis client packages.
+
+```
+distributed-deque/
+├── README.md
+├── AGENTS.md
+├── go.mod
+├── go.sum
+│
+├── errors.go                 # distributeddeque — ErrEmpty, ErrClosed
+├── deque.go                  # distributeddeque — Deque interface
+├── config.go                 # (planned) shared options, e.g. RemoteDeque URL/timeouts
+│
+├── memory/                   # package memory — in-process deque
+│   ├── node.go               # node { value, prev, next } and link/unlink helpers
+│   ├── deque.go              # MemoryDeque { mu, head, tail, size, closed }
+│   ├── deque_test.go         # unit tests (empty, both ends, Close, -race)
+│   └── ring.go               # (later) optional ring-buffer backing, same API
+│
+├── remote/                   # (planned) package remote — HTTP client
+│   ├── deque.go              # RemoteDeque
+│   └── deque_test.go
+│
+├── cmd/
+│   └── queued/               # (planned) queue server binary
+│       └── main.go           # owns the only MemoryDeque; HTTP push/pop API
+│
+├── test/
+│   └── integration/          # (planned) build tag: integration
+│       └── remote_deque_test.go   # multi-process / HTTP; replaces Redis-era names
+│
+└── docs/
+    └── deque-guide.md
+```
+
+| Path | Package | Role |
+|------|---------|------|
+| Root `.go` files | `distributeddeque` | Public contract: interface, errors; importers use `memory.NewMemoryDeque()` |
+| `memory/node.go` | `memory` | Doubly-linked **node** type; keeps pointer logic separate from `MemoryDeque` |
+| `memory/deque.go` | `memory` | **O(1)** push/pop at head/tail; returns root `ErrEmpty` / `ErrClosed` |
+| `memory/ring.go` | `memory` | **Later** — swap internals only; same `MemoryDeque` methods |
+| `remote/` | `remote` | Client to `cmd/queued`; network errors ≠ `ErrEmpty` |
+| `cmd/queued/` | `main` | Single owner of canonical deque for distribution challenge |
+
+**Tests:** fast tests live next to code (`memory/deque_test.go`); cross-package checks under `test/integration/`.
+
+---
+
 ## Suggested learning path
 
 1. **`errors.go`** — `ErrEmpty`, `ErrClosed`.
 2. **`deque.go`** — `Deque` interface.
-3. **`memory/deque.go`** — doubly-linked list + mutex; table-driven unit tests.
-4. **Concurrency test** — many goroutines push/pop one `MemoryDeque`.
-5. **`cmd/queued` (optional)** — tiny HTTP server owning one deque; CLI workers call it.
-6. **`remote/deque.go` (optional)** — `RemoteDeque` client wrapping that API.
-7. **Integration test** — two processes or two HTTP clients, one server.
+3. **`memory/node.go`** — node struct and link helpers.
+4. **`memory/deque.go`** + **`memory/deque_test.go`** — doubly-linked deque + mutex.
+5. **Concurrency test** — `-race` with many goroutines on one `MemoryDeque`.
+6. **`cmd/queued` (optional)** — queue server owning one deque.
+7. **`remote/deque.go` (optional)** — `RemoteDeque` client.
+8. **`test/integration/remote_deque_test.go` (optional)** — HTTP / multi-client.
+9. **`memory/ring.go` (later)** — ring-buffer optimization.
 
 Deep dive: [`docs/deque-guide.md`](docs/deque-guide.md).
 
