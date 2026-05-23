@@ -14,13 +14,22 @@ type MemoryDeque struct {
 	closed bool
 }
 
+func (d* MemoryDeque) requireOpen() error {
+	
+	if d.closed {
+		return distributeddeque.ErrClosed
+	}
+
+	return nil
+}
+ 
 func (d *MemoryDeque) Len(ctx context.Context) (int64, error) {
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.closed {
-		return 0, distributeddeque.ErrClosed
+	if err := d.requireOpen(); err != nil {
+		return 0, err
 	}
 
 	return d.size, nil
