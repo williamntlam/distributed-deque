@@ -124,6 +124,18 @@ With **RemoteDeque**, the same rule applies at the server: concurrent client pop
 
 Do not spin-tight `Pop` in a loop when empty — block or sleep with backoff.
 
+### Sync API now, async later (planned)
+
+**v1** keeps the public [`Deque`](deque.go) interface **synchronous**: each call returns when the operation finishes (or returns `ErrEmpty`). A `sync.Mutex` on `MemoryDeque` only serializes short pointer updates — it is not the same as “wait until a message arrives” or blocking on the network.
+
+| Concern | v1 | Planned later |
+|---------|----|----------------|
+| Empty pop | `ErrEmpty` immediately | Optional **blocking pop** (`sync.Cond` + `context`) for workers |
+| Caller blocking | Caller goroutine waits for the op | Optional **async helpers** (e.g. `PopFrontAsync` → `<-chan` result, or app wraps sync calls in `go func() { ... }()`) |
+| `RemoteDeque` | — | Async wrappers matter more here (HTTP latency); sync client + timeouts first |
+
+Async will be added **on top of** the sync implementation — not by removing the mutex. Typical pattern: worker runs sync `PopFront` in a background goroutine, or a thin helper returns a channel that receives `{value, err}` when done.
+
 ---
 
 ## Delivery semantics (honest defaults)
@@ -227,6 +239,7 @@ Deep dive: [`docs/deque-guide.md`](docs/deque-guide.md).
 5. Optional `RemoteDeque` + example queue server
 6. Documented non-goals: exactly-once, built-in priority scheduler, Redis backend in v1
 7. **(Later)** Ring-buffer `MemoryDeque` variant for allocation/cache tradeoffs
+8. **(Later)** Optional async client helpers and blocking pop (see [Sync API now, async later](#sync-api-now-async-later-planned))
 
 ---
 

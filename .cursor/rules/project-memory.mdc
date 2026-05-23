@@ -35,7 +35,7 @@ Doubly-linked list in `memory/` — **not** `list/` or `stream/`. See README **R
 | `errors.go` | Done |
 | `deque.go`, `memory/node.go`, `memory/deque.go` | Not started |
 | `memory/ring.go`, `remote/`, `cmd/queued/`, `test/integration/` | Planned / later |
-| Roadmap | `ErrReadOnly`, `ErrTimeout`, blocking pop |
+| Roadmap | `ErrReadOnly`, `ErrTimeout`, blocking pop, async helpers (on top of sync API) |
 
 ## Error semantics
 

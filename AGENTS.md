@@ -58,6 +58,8 @@ Full tree: see **Repository layout** in [`README.md`](README.md).
 | `ErrClosed` | Client closed; no further ops on this instance |
 | `ErrReadOnly`, `ErrTimeout` | Planned (see README roadmap) |
 
+**API stance:** v1 `Deque` is **sync only**. **Later:** optional blocking pop + async client helpers (channels / goroutine wrappers); see README “Sync API now, async later”.
+
 Callers should use `errors.Is(err, distributeddeque.ErrEmpty)` (export `IsEmpty` / `IsClosed` later if needed).
 
 ---

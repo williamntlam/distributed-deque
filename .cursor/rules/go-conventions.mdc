@@ -50,7 +50,7 @@ type Deque interface {
 }
 ```
 
-- Every op takes **`context.Context`** first — cancellation must stop blocking waits.
+- Every op takes **`context.Context`** first — cancellation must stop blocking waits (v1 pops are non-blocking; blocking/async planned later per README).
 - Payload type **`[]byte`** until a generic or typed envelope is designed.
 
 ## Errors

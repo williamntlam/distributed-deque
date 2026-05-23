@@ -107,6 +107,17 @@ This mirrors what Redis `LPOP` gives you at the server — but here **you** are 
 
 **Best practice:** Worker loops use blocking pop with `context` cancel on shutdown, not `for { Pop(); sleep }`.
 
+### Sync now, async later (planned)
+
+The public `Deque` interface stays **synchronous** in v1: `PopFront` / `PopBack` return when the call finishes (or `ErrEmpty`). The mutex is only for safe, short critical sections — not a substitute for “wait until work arrives.”
+
+| Layer | v1 | Later (optional) |
+|-------|----|------------------|
+| **MemoryDeque** | Non-blocking pop → `ErrEmpty` | Blocking pop (`sync.Cond` + `ctx`); async helpers (e.g. result channel) |
+| **App / RemoteDeque** | Caller may use `go func() { d.PopFront(ctx) }()` | Dedicated `*Async` helpers; HTTP long-poll where relevant |
+
+Async features will sit **above** sync push/pop — same `MemoryDeque` internals, extra ergonomics for workers and remote clients. See README [Sync API now, async later](../README.md#sync-api-now-async-later-planned).
+
 ---
 
 ## 5. Making it distributed
@@ -252,5 +263,6 @@ Optional: run a queue server and two worker CLIs in separate terminals once `cmd
 7. **`remote/deque.go`** — HTTP client.
 8. **`test/integration/remote_deque_test.go`** — multi-client.
 9. **`memory/ring.go`** — ring-buffer optimization.
+10. **Async helpers / blocking pop** — after sync API and tests are solid.
 
 Update [`AGENTS.md`](../AGENTS.md) when you complete each milestone.
