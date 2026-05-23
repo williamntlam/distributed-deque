@@ -16,6 +16,15 @@ type MemoryDeque struct {
 
 func (d *MemoryDeque) Len(ctx context.Context) (int64, error) {
 
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.closed {
+		return 0, distributeddeque.ErrClosed
+	}
+
+	return d.size, nil
+
 }
 
 func (d *MemoryDeque) PushBack(ctx context.Context, value []byte) error {
