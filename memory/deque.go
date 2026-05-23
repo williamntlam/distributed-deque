@@ -38,6 +38,36 @@ func (d *MemoryDeque) Len(ctx context.Context) (int64, error) {
 
 func (d *MemoryDeque) PushBack(ctx context.Context, value []byte) error {
 
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if err := d.requireOpen(); err != nil {
+		return err
+	}
+
+	// Create a new node.
+
+	newNode := &node{value: value}
+	
+	if d.head == nil {
+
+		d.head = newNode
+		d.tail = newNode
+
+	} else {
+
+		// Add node to Deque
+
+		newNode.prev = d.tail
+		d.tail.next = newNode
+		d.tail = newNode
+
+	}
+
+	d.size++
+
+	return nil
+
 }
 
 func (d *MemoryDeque) PushFront(ctx context.Context, value []byte) error {
