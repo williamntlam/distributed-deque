@@ -96,6 +96,45 @@ Ten goroutines calling `PopFront` on the **same** `MemoryDeque`:
 
 This mirrors what Redis `LPOP` gives you at the server — but here **you** are the server and the lock is in Go.
 
+### 3.1 Two concurrency modes (pick per workload)
+
+The same `MemoryDeque` supports **both** patterns. See README [Ordering: strict FIFO vs concurrent workers](../README.md#ordering-strict-fifo-vs-concurrent-workers).
+
+#### Mode A — Strict / reproducible FIFO
+
+```text
+one producer goroutine  →  PushBack(1,2,3…)  →  deque  →  PopFront  →  one consumer goroutine
+```
+
+| | |
+|---|---|
+| **Goal** | Same order **every test run**; one global processing timeline |
+| **Tests** | `TestPushBack_PopFront_FIFO`, `TestPushBothEnds_PopBothEnds`, etc. (single test goroutine) |
+| **Distributed later** | One popper on `cmd/queued`; many pushers OK if broker serializes |
+
+#### Mode B — Concurrent worker pool
+
+```text
+many goroutines PushBack  ──┐
+                            ├──►  one MemoryDeque  ◄──  many goroutines PopFront
+```
+
+| | |
+|---|---|
+| **Goal** | Safety under contention (`go test -race`); throughput; order **not** fixed |
+| **Tests** | `TestConcurrentPushPop` |
+| **Note** | Deque snapshot and **who** pops what vary run-to-run; each pop still takes **head** |
+
+#### What FIFO means here
+
+| Guaranteed | Not guaranteed |
+|------------|----------------|
+| Each successful `PopFront` removes the **head** | Same **append** order across runs with many racing producers |
+| One append timeline **per run** if broker/mutex serializes writes | **Business** workflow order unless you orchestrate producers |
+| Safe behavior with `-race` when locked correctly | Global order across **multiple deques** or shards |
+
+Optional: `memory/deque_internal_test.go` in **`package memory`** can assert `head`/`tail == nil` or `closed == true` — fields are unexported, so `memory_test` cannot see them.
+
 ---
 
 ## 4. Blocking vs empty (local)
@@ -257,8 +296,8 @@ Optional: run a queue server and two worker CLIs in separate terminals once `cmd
 1. **`errors.go`** — `ErrEmpty`, `ErrClosed`.
 2. **`deque.go`** — interface.
 3. **`memory/node.go`** — node + link helpers.
-4. **`memory/deque.go`** + **`memory/deque_test.go`** — four ops, `size`, mutex.
-5. **Race test** — `go test -race ./memory/...`.
+4. **`memory/deque.go`** + **`memory/deque_test.go`** — Mode A (strict FIFO) tests first.
+5. **Mode B** — `TestConcurrentPushPop`; `go test -race ./memory/...`.
 6. **`cmd/queued`** — queue server (one owner).
 7. **`remote/deque.go`** — HTTP client.
 8. **`test/integration/remote_deque_test.go`** — multi-client.

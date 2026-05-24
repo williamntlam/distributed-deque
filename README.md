@@ -114,6 +114,73 @@ With **one** `MemoryDeque` behind the server:
 
 With **RemoteDeque**, the same rule applies at the server: concurrent client pops are serialized by the server’s mutex (or equivalent).
 
+### Ordering: strict FIFO vs concurrent workers
+
+`MemoryDeque` is **thread-safe** for both patterns below. **Order policy is your choice** — the library gives FIFO **at the head** on each successful pop, not global business workflow rules.
+
+#### Mode A — Strict / reproducible order
+
+Use when you need the **same append and processing sequence every run** (or a single global timeline).
+
+```text
+one producer  ──►  PushBack…  ──►  one MemoryDeque  ──►  PopFront…  ──►  one consumer
+   (goroutine)                                              (goroutine)
+```
+
+| Piece | Rule |
+|-------|------|
+| **Producers** | **One** goroutine pushing in sequence (simplest), *or* many writers through **one broker** where you accept **arrival order** (may differ run-to-run) |
+| **Deque ops** | Pick one lane — e.g. **`PushBack` + `PopFront`** (queue FIFO) |
+| **Consumers** | **One** goroutine popping |
+| **Tests in repo** | `TestPushBack_PopFront_FIFO`, `TestPushFront_PopBack_LIFOAtBack`, other single-goroutine tests |
+
+What you get: deterministic tests; processing matches queue order front → back.
+
+What you do **not** get automatically: a fixed business checklist (“step 2 always runs”) — only FIFO for events **actually enqueued**.
+
+#### Mode B — Concurrent worker pool
+
+Use when tasks are **independent** and you want **throughput + mutex safety**, not a fixed global processing timeline.
+
+```text
+many producers ──►  PushBack…  ──►  one MemoryDeque  ◄──  PopFront…  ── many consumers
+                                         ▲
+                                    mutex serializes
+                                    each push/pop
+```
+
+| Piece | Rule |
+|-------|------|
+| **Producers / consumers** | **Many** goroutines (or many remote clients later) |
+| **Safety** | Mutex / queue server prevents corruption; `-race` should pass |
+| **Order** | **Non-deterministic** interleaving — snapshot of the list and **who** popped what changes run-to-run |
+| **Tests in repo** | `TestConcurrentPushPop` |
+
+What you get: safe sharing; each successful pop still removes the **current head** (FIFO at that instant).
+
+What you do **not** get: same enqueue order every run; strict global **processing** order across workers.
+
+#### Mode C — Many writers, one broker, one consumer (distributed strict processing)
+
+Strict **processing** order without a single producer thread:
+
+```text
+many producers  ──►  cmd/queued / broker (mutex)  ──►  one deque  ──►  one consumer
+```
+
+Append order = **broker timeline** (stable **within** a run; may vary **across** runs if producers race). Processing order = FIFO if **one** popper.
+
+#### Quick chooser
+
+| Need | Mode |
+|------|------|
+| Exact test assertions every run | **A** — single goroutine in test, or one producer + one consumer |
+| Parallel workers, order doesn’t matter | **B** — `TestConcurrentPushPop` style |
+| Many API servers, one ordered pipeline | **C** — broker + **one** consumer |
+| Order per user / tenant | **Partition** — `deque:{id}` per entity + one consumer **per partition** |
+
+See [`docs/deque-guide.md`](docs/deque-guide.md) §3 (concurrency) and §5 (broker) for detail.
+
 ### Waiting when empty
 
 | Approach | Behavior |
@@ -182,7 +249,7 @@ distributed-deque/
 ├── memory/                   # package memory — in-process deque
 │   ├── node.go               # node { value, prev, next } and link/unlink helpers
 │   ├── deque.go              # MemoryDeque { mu, head, tail, size, closed }
-│   ├── deque_test.go         # unit tests (empty, both ends, Close, -race)
+│   ├── deque_test.go         # Mode A (FIFO) + Mode B (TestConcurrentPushPop) tests
 │   └── ring.go               # (later) optional ring-buffer backing, same API
 │
 ├── remote/                   # (planned) package remote — HTTP client
@@ -219,8 +286,8 @@ distributed-deque/
 1. **`errors.go`** — `ErrEmpty`, `ErrClosed`.
 2. **`deque.go`** — `Deque` interface.
 3. **`memory/node.go`** — node struct and link helpers.
-4. **`memory/deque.go`** + **`memory/deque_test.go`** — doubly-linked deque + mutex.
-5. **Concurrency test** — `-race` with many goroutines on one `MemoryDeque`.
+4. **`memory/deque.go`** + **`memory/deque_test.go`** — deque + **Mode A** tests (strict FIFO, single goroutine).
+5. **Mode B concurrency test** — `TestConcurrentPushPop`; `go test -race ./memory/...`.
 6. **`cmd/queued` (optional)** — queue server owning one deque.
 7. **`remote/deque.go` (optional)** — `RemoteDeque` client.
 8. **`test/integration/remote_deque_test.go` (optional)** — HTTP / multi-client.

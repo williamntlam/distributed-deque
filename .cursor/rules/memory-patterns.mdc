@@ -33,6 +33,15 @@ Author is **learning** — explain mutex boundaries and distribution tradeoffs; 
 - **Concurrency:** many goroutines on one `MemoryDeque` — mutex serializes; each pop gets at most one element.
 - **Not distributed:** each process has its own instance unless using `RemoteDeque`.
 
+## Ordering modes (both valid)
+
+| Mode | Producers | Consumers | Tests | Use when |
+|------|-----------|-----------|-------|----------|
+| **A — strict FIFO** | One (or broker + accept arrival order) | **One** | `TestPushBack_PopFront_FIFO`, etc. | Reproducible order |
+| **B — worker pool** | Many | Many | `TestConcurrentPushPop`, `-race` | Throughput; order not fixed |
+
+README: **Ordering: strict FIFO vs concurrent workers**. Guide: §3.1.
+
 ## RemoteDeque ↔ HTTP (planned)
 
 | Go op | HTTP (illustrative) | Notes |

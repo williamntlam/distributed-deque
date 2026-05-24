@@ -58,7 +58,9 @@ Full tree: see **Repository layout** in [`README.md`](README.md).
 | `ErrClosed` | Client closed; no further ops on this instance |
 | `ErrReadOnly`, `ErrTimeout` | Planned (see README roadmap) |
 
-**API stance:** v1 `Deque` is **sync only**. **Later:** optional blocking pop + async client helpers (channels / goroutine wrappers); see README “Sync API now, async later”.
+**API stance:** v1 `Deque` is **sync only**. **Later:** optional blocking pop + async helpers (see README “Sync API now, async later”).
+
+**Ordering:** support **both** modes — **Mode A** strict FIFO (one producer + one consumer, or single test goroutine); **Mode B** concurrent pool (`TestConcurrentPushPop`). See README [Ordering: strict FIFO vs concurrent workers](README.md#ordering-strict-fifo-vs-concurrent-workers) and `docs/deque-guide.md` §3.1.
 
 Callers should use `errors.Is(err, distributeddeque.ErrEmpty)` (export `IsEmpty` / `IsClosed` later if needed).
 
