@@ -176,7 +176,7 @@ func TestConcurrentPushPop(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 2)
 
-	for g := range goroutines {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			for i := range perG {
