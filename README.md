@@ -30,7 +30,7 @@ A standard **queue** implies strict FIFO. This project supports **bidirectional*
 
 ## Architecture
 
-One Go `Deque` interface. Two planned implementations:
+One Go `Deque` interface. **In-process:** `MemoryDeque`. **Distributed:** `cmd/queued` owns the only deque and exposes HTTP; other processes use **any HTTP client** (e.g. `curl`) — there is no `remote` Go package in this repo.
 
 ```
                     ┌─────────────────────┐
@@ -40,12 +40,12 @@ One Go `Deque` interface. Two planned implementations:
               ┌────────────────┴────────────────┐
               ▼                                 ▼
     ┌──────────────────┐              ┌──────────────────┐
-    │   MemoryDeque    │              │   RemoteDeque    │
-    │ (linked list +   │              │ (HTTP/RPC client)│
-    │      mutex)      │              │                  │
+    │   MemoryDeque    │              │  cmd/queued      │
+    │ (linked list +   │              │  HTTP POST /push │
+    │      mutex)      │              │  GET /pop        │
     └──────────────────┘              └────────┬─────────┘
               │                                │
-     one process, many goroutines      many processes ──► one queue server
+     one process, many goroutines      curl / scripts / apps ──► one queue server
 ```
 
 ### `MemoryDeque` (in-memory doubly-linked list)
@@ -63,34 +63,34 @@ Use a **doubly-linked** list, not a Go slice: prepending at the front of a slice
 
 Many goroutines can call `PopFront` concurrently; the mutex serializes access so each pop removes **one** distinct element (or returns `ErrEmpty`).
 
-### `RemoteDeque` (distributed — planned)
+### `cmd/queued` (distributed — HTTP server)
 
 | | |
 |---|---|
-| **Storage** | A **single process** still owns the linked deque; other processes are clients |
-| **Transport** | HTTP (or gRPC) — e.g. `POST /push`, `GET /pop` |
-| **Best for** | Learning distribution without operating Redis; optional challenge track |
+| **Storage** | A **single process** owns the linked deque (`MemoryDeque`) |
+| **Transport** | HTTP — `POST /push` → `PushBack`, `GET /pop` → `PopFront` (204 if empty) |
+| **Clients** | `curl`, scripts, or your own apps — not a bundled Go HTTP client package |
 
 **Distributed** here means: many apps, **one logical deque**, state **not** in each client’s heap.
 
 ```
-  Worker A ──┐
-  Worker B ──┼──►  Queue server (owns MemoryDeque)  ◄── single source of truth
-  API      ──┘
+  Worker A (curl) ──┐
+  Worker B (curl) ──┼──►  cmd/queued (owns MemoryDeque)  ◄── single source of truth
+  API (curl)      ──┘
 ```
 
-External stores (e.g. Redis) are **out of scope for v1**; you can add them later as another `RemoteDeque` backend once the local and HTTP paths are clear.
+External stores (e.g. Redis) are **out of scope for v1**.
 
 ---
 
 ## Choosing an implementation
 
-| Question | **MemoryDeque** | **RemoteDeque** |
-|----------|-----------------|-----------------|
+| Question | **MemoryDeque** | **`cmd/queued` + HTTP** |
+|----------|-----------------|-------------------------|
 | Multiple OS processes? | No (unless you share memory externally) | Yes |
 | Network round-trips? | No | Yes |
 | Survives process restart? | No (unless you add persistence) | Only if the server persists |
-| Complexity | Low | Medium (API, timeouts, errors) |
+| Complexity | Low | Medium (HTTP contract, status codes) |
 | Good first step? | **Yes** | After `MemoryDeque` works |
 
 ---
@@ -112,7 +112,7 @@ With **one** `MemoryDeque` behind the server:
 - Each successful `PopFront` removes one element under the mutex — no duplicate element from two pops.
 - With **separate** `MemoryDeque` instances per process, each has its own list — that is **not** distributed; workers do not share work.
 
-With **RemoteDeque**, the same rule applies at the server: concurrent client pops are serialized by the server’s mutex (or equivalent).
+With **`cmd/queued`**, the same rule applies: concurrent HTTP pops are serialized by the server’s mutex.
 
 ### Ordering: strict FIFO vs concurrent workers
 
@@ -151,7 +151,7 @@ many producers ──►  PushBack…  ──►  one MemoryDeque  ◄──  Po
 
 | Piece | Rule |
 |-------|------|
-| **Producers / consumers** | **Many** goroutines (or many remote clients later) |
+| **Producers / consumers** | **Many** goroutines (or many HTTP clients to `cmd/queued`) |
 | **Safety** | Mutex / queue server prevents corruption; `-race` should pass |
 | **Order** | **Non-deterministic** interleaving — snapshot of the list and **who** popped what changes run-to-run |
 | **Tests in repo** | `TestConcurrentPushPop` |
@@ -199,7 +199,7 @@ Do not spin-tight `Pop` in a loop when empty — block or sleep with backoff.
 |---------|----|----------------|
 | Empty pop | `ErrEmpty` immediately | Optional **blocking pop** (`sync.Cond` + `context`) for workers |
 | Caller blocking | Caller goroutine waits for the op | Optional **async helpers** (e.g. `PopFrontAsync` → `<-chan` result, or app wraps sync calls in `go func() { ... }()`) |
-| `RemoteDeque` | — | Async wrappers matter more here (HTTP latency); sync client + timeouts first |
+| HTTP clients (`curl`, etc.) | Manual requests | Async / long-poll patterns optional later |
 
 Async will be added **on top of** the sync implementation — not by removing the mutex. Typical pattern: worker runs sync `PopFront` in a background goroutine, or a thin helper returns a channel that receives `{value, err}` when done.
 
@@ -210,7 +210,7 @@ Async will be added **on top of** the sync implementation — not by removing th
 | Backend | After pop | If worker crashes mid-handler |
 |---------|-----------|-------------------------------|
 | **MemoryDeque** | Element removed from deque | Work is **lost** (at-most-once) unless you re-queue manually |
-| **RemoteDeque** | Same, once server committed pop | Same; retries may need idempotent handlers |
+| **`cmd/queued`** | Same, once server committed pop | Same; retries may need idempotent handlers |
 
 **Exactly-once** is not a goal of v1. Use idempotency keys in the application if retries happen.
 
@@ -244,7 +244,6 @@ distributed-deque/
 │
 ├── errors.go                 # distributeddeque — ErrEmpty, ErrClosed
 ├── deque.go                  # distributeddeque — Deque interface
-├── config.go                 # (planned) shared options, e.g. RemoteDeque URL/timeouts
 │
 ├── memory/                   # package memory — in-process deque
 │   ├── node.go               # node { value, prev, next } and link/unlink helpers
@@ -252,17 +251,9 @@ distributed-deque/
 │   ├── deque_test.go         # Mode A (FIFO) + Mode B (TestConcurrentPushPop) tests
 │   └── ring.go               # (later) optional ring-buffer backing, same API
 │
-├── remote/                   # (planned) package remote — HTTP client
-│   ├── deque.go              # RemoteDeque
-│   └── deque_test.go
-│
 ├── cmd/
-│   └── queued/               # (planned) queue server binary
+│   └── queued/               # queue server binary
 │       └── main.go           # owns the only MemoryDeque; HTTP push/pop API
-│
-├── test/
-│   └── integration/          # (planned) build tag: integration
-│       └── remote_deque_test.go   # multi-process / HTTP; replaces Redis-era names
 │
 └── docs/
     └── deque-guide.md
@@ -274,10 +265,9 @@ distributed-deque/
 | `memory/node.go` | `memory` | Doubly-linked **node** type; keeps pointer logic separate from `MemoryDeque` |
 | `memory/deque.go` | `memory` | **O(1)** push/pop at head/tail; returns root `ErrEmpty` / `ErrClosed` |
 | `memory/ring.go` | `memory` | **Later** — swap internals only; same `MemoryDeque` methods |
-| `remote/` | `remote` | Client to `cmd/queued`; network errors ≠ `ErrEmpty` |
-| `cmd/queued/` | `main` | Single owner of canonical deque for distribution challenge |
+| `cmd/queued/` | `main` | Single owner of canonical deque; HTTP API for other processes |
 
-**Tests:** fast tests live next to code (`memory/deque_test.go`); cross-package checks under `test/integration/`.
+**Tests:** `memory/deque_test.go`. Exercise distribution with `go run ./cmd/queued` and `curl` (see server section).
 
 ---
 
@@ -288,10 +278,8 @@ distributed-deque/
 3. **`memory/node.go`** — node struct and link helpers.
 4. **`memory/deque.go`** + **`memory/deque_test.go`** — deque + **Mode A** tests (strict FIFO, single goroutine).
 5. **Mode B concurrency test** — `TestConcurrentPushPop`; `go test -race ./memory/...`.
-6. **`cmd/queued` (optional)** — queue server owning one deque.
-7. **`remote/deque.go` (optional)** — `RemoteDeque` client.
-8. **`test/integration/remote_deque_test.go` (optional)** — HTTP / multi-client.
-9. **`memory/ring.go` (later)** — ring-buffer optimization.
+6. **`cmd/queued`** — queue server owning one deque; test with `curl`.
+7. **`memory/ring.go` (later)** — ring-buffer optimization.
 
 Deep dive: [`docs/deque-guide.md`](docs/deque-guide.md).
 
@@ -303,7 +291,7 @@ Deep dive: [`docs/deque-guide.md`](docs/deque-guide.md).
 2. `context.Context` on all operations
 3. `MemoryDeque` — full four ops + `Len` + `Close`
 4. Blocking pop with `ctx` cancellation
-5. Optional `RemoteDeque` + example queue server
+5. `cmd/queued` queue server + HTTP (`POST /push`, `GET /pop`); clients via `curl` or any HTTP tool
 6. Documented non-goals: exactly-once, built-in priority scheduler, Redis backend in v1
 7. **(Later)** Ring-buffer `MemoryDeque` variant for allocation/cache tradeoffs
 8. **(Later)** Optional async client helpers and blocking pop (see [Sync API now, async later](#sync-api-now-async-later-planned))

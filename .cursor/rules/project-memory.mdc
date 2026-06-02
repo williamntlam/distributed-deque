@@ -7,11 +7,11 @@ alwaysApply: true
 
 Read `AGENTS.md` at the repo root for the full, maintained summary.
 
-**Topic rules:** `go-conventions.mdc` (Go files), `memory-patterns.mdc` (`memory/`, `remote/`, `cmd/`, tests). **Learning doc:** `docs/deque-guide.md`.
+**Topic rules:** `go-conventions.mdc` (Go files), `memory-patterns.mdc` (`memory/`, `cmd/`). **Learning doc:** `docs/deque-guide.md`.
 
 ## What this is
 
-Go library: **deque** with **in-memory doubly-linked list** first (`MemoryDeque`: nodes + `head`/`tail` + mutex, O(1) both ends). **Distributed** = optional **`RemoteDeque`** client to a queue server that owns the only `MemoryDeque`. Redis is **not** v1 scope. See `README.md`.
+Go library: **deque** with **in-memory doubly-linked list** (`MemoryDeque`: nodes + `head`/`tail` + mutex, O(1) both ends). **Distributed** = **`cmd/queued`** owns the only deque and serves HTTP (`POST /push`, `GET /pop`). Other processes use **curl** or any HTTP client — **no** `remote/` package. Redis is **not** in scope. See `README.md`.
 
 - **Module:** `github.com/williamntlam/distributed-deque`
 - **Package name:** `distributeddeque`
@@ -19,29 +19,28 @@ Go library: **deque** with **in-memory doubly-linked list** first (`MemoryDeque`
 ## Repository layout (target)
 
 ```
-errors.go, deque.go, config.go
+errors.go, deque.go
 memory/node.go, memory/deque.go, memory/deque_test.go
 memory/ring.go (later)
-remote/deque.go, cmd/queued/main.go, test/integration/remote_deque_test.go (planned)
+cmd/queued/main.go
 ```
 
-Doubly-linked list in `memory/` — **not** `list/` or `stream/`. See README **Repository layout**.
+Doubly-linked list in `memory/` — **not** `list/`, `stream/`, or `remote/`. See README **Repository layout**.
 
 ## Implementation status
 
 | Area | Status |
 |------|--------|
-| `README.md` | Design + layout |
-| `errors.go` | Done |
-| `deque.go`, `memory/node.go`, `memory/deque.go` | Not started |
-| `memory/ring.go`, `remote/`, `cmd/queued/`, `test/integration/` | Planned / later |
-| Roadmap | `ErrReadOnly`, `ErrTimeout`, blocking pop, async helpers (on top of sync API) |
+| `errors.go`, `deque.go`, `memory/*` (except ring) | Done |
+| `cmd/queued/main.go` | Done — HTTP server |
+| `memory/ring.go` | Later |
+| Roadmap | `ErrReadOnly`, `ErrTimeout`, blocking pop, async helpers |
 
 ## Error semantics
 
-- **`ErrEmpty`** — non-blocking pop when deque has no elements (client still usable).
-- **`ErrClosed`** — client shut down (e.g. after `Close()`); ops rejected until a new client is created.
-- Distinguish from HTTP/network errors and `context` cancellation in `RemoteDeque`.
+- **`ErrEmpty`** — non-blocking pop when deque has no elements.
+- **`ErrClosed`** — after `Close()` on the deque instance.
+- **HTTP server:** map `ErrEmpty` → 204 on pop; do not use 500 for empty.
 
 ## Toolchain (important)
 
@@ -53,7 +52,7 @@ Doubly-linked list in `memory/` — **not** `list/` or `stream/`. See README **R
 
 ## Dependencies
 
-- **v1:** standard library only (no Redis client required for core path).
+- **v1:** standard library only.
 
 ## Learning mode (priority)
 

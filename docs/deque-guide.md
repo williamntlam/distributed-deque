@@ -153,9 +153,9 @@ The public `Deque` interface stays **synchronous** in v1: `PopFront` / `PopBack`
 | Layer | v1 | Later (optional) |
 |-------|----|------------------|
 | **MemoryDeque** | Non-blocking pop → `ErrEmpty` | Blocking pop (`sync.Cond` + `ctx`); async helpers (e.g. result channel) |
-| **App / RemoteDeque** | Caller may use `go func() { d.PopFront(ctx) }()` | Dedicated `*Async` helpers; HTTP long-poll where relevant |
+| **HTTP clients** (`curl`, etc.) | Manual `GET /pop` | Long-poll or async wrappers optional later |
 
-Async features will sit **above** sync push/pop — same `MemoryDeque` internals, extra ergonomics for workers and remote clients. See README [Sync API now, async later](../README.md#sync-api-now-async-later-planned).
+Async features will sit **above** sync push/pop — same `MemoryDeque` internals. See README [Sync API now, async later](../README.md#sync-api-now-async-later-planned).
 
 ---
 
@@ -177,8 +177,8 @@ One binary holds the only `MemoryDeque`. Others use HTTP (or gRPC):
 
 | HTTP (example) | Maps to |
 |----------------|---------|
-| `POST /push/back` body | `PushBack` |
-| `GET /pop/front` | `PopFront` → 200 + body or 204 empty |
+| `POST /push` body | `PushBack` |
+| `GET /pop` | `PopFront` → 200 + body or 204 empty |
 
 You learn:
 
@@ -204,25 +204,25 @@ You learn:
 
 ---
 
-## 6. Local vs remote comparison
+## 6. Local vs HTTP (queue server) comparison
 
-| Concern | MemoryDeque | RemoteDeque (HTTP server) |
-|---------|-------------|---------------------------|
+| Concern | MemoryDeque | `cmd/queued` (HTTP server) |
+|---------|-------------|----------------------------|
 | Latency | Lowest | Network RTT |
 | Multi-process | No | Yes (via server) |
 | Restart | Deque gone | Gone unless server persists |
-| Empty signal | `ErrEmpty` | Map from HTTP 204 / body |
-| Infra errors | N/A | Distinct from `ErrEmpty` |
+| Empty signal | `ErrEmpty` | HTTP **204** on `GET /pop` |
+| Infra errors | N/A | Connection errors ≠ empty deque |
 
 ---
 
 ## 7. Failures you should understand
 
-| Scenario | MemoryDeque | RemoteDeque |
-|----------|-------------|-------------|
+| Scenario | MemoryDeque | `cmd/queued` |
+|----------|-------------|--------------|
 | Pop then crash before handler | Item lost | Item lost (server already popped) |
-| `Close()` on deque | `ErrClosed` on ops | Client should stop; server may drain |
-| Many concurrent pops | Safe (mutex) | Safe if server uses one MemoryDeque |
+| `Close()` on deque | `ErrClosed` on ops | HTTP clients get 503; server may drain |
+| Many concurrent pops | Safe (mutex) | Safe — one `MemoryDeque` on server |
 
 Always separate **`ErrEmpty`**, **`ErrClosed`**, and **infrastructure errors**.
 
@@ -287,7 +287,7 @@ go test ./...
 go test -race ./memory/...
 ```
 
-Optional: run a queue server and two worker CLIs in separate terminals once `cmd/queued` exists.
+Optional: run `go run ./cmd/queued` and use `curl` from another terminal for push/pop.
 
 ---
 
@@ -298,10 +298,8 @@ Optional: run a queue server and two worker CLIs in separate terminals once `cmd
 3. **`memory/node.go`** — node + link helpers.
 4. **`memory/deque.go`** + **`memory/deque_test.go`** — Mode A (strict FIFO) tests first.
 5. **Mode B** — `TestConcurrentPushPop`; `go test -race ./memory/...`.
-6. **`cmd/queued`** — queue server (one owner).
-7. **`remote/deque.go`** — HTTP client.
-8. **`test/integration/remote_deque_test.go`** — multi-client.
-9. **`memory/ring.go`** — ring-buffer optimization.
-10. **Async helpers / blocking pop** — after sync API and tests are solid.
+6. **`cmd/queued`** — queue server (one owner); test with `curl`.
+7. **`memory/ring.go`** — ring-buffer optimization.
+8. **Async helpers / blocking pop** — after sync API and tests are solid.
 
 Update [`AGENTS.md`](../AGENTS.md) when you complete each milestone.

@@ -1,6 +1,6 @@
 ---
-description: In-memory deque patterns for MemoryDeque and RemoteDeque client
-globs: "memory/**/*.go,remote/**/*.go,cmd/**/*.go,test/integration/**/*.go"
+description: In-memory deque and queue-server patterns for distributed-deque
+globs: "memory/**/*.go,cmd/**/*.go"
 alwaysApply: false
 ---
 
@@ -13,6 +13,7 @@ Deep dive: **`docs/deque-guide.md`**. File tree: README **Repository layout**.
 | `memory/node.go` | `node`, link/unlink at head/tail |
 | `memory/deque.go` | `MemoryDeque`, mutex, `size`, four ops |
 | `memory/ring.go` | (later) ring buffer — same methods |
+| `cmd/queued/main.go` | HTTP server; owns the only canonical deque |
 
 Author is **learning** — explain mutex boundaries and distribution tradeoffs; avoid implementing whole packages unless asked.
 
@@ -31,7 +32,7 @@ Author is **learning** — explain mutex boundaries and distribution tradeoffs; 
 - **Later:** ring buffer (circular slice + head/tail) — same O(1) ends, fewer allocs; swap internals after linked list ships.
 - **Atomicity:** hold one mutex for the whole push/pop/unlink.
 - **Concurrency:** many goroutines on one `MemoryDeque` — mutex serializes; each pop gets at most one element.
-- **Not distributed:** each process has its own instance unless using `RemoteDeque`.
+- **Not distributed:** each process has its own `MemoryDeque` unless talking to `cmd/queued`.
 
 ## Ordering modes (both valid)
 
@@ -42,16 +43,16 @@ Author is **learning** — explain mutex boundaries and distribution tradeoffs; 
 
 README: **Ordering: strict FIFO vs concurrent workers**. Guide: §3.1.
 
-## RemoteDeque ↔ HTTP (planned)
+## cmd/queued ↔ HTTP
 
-| Go op | HTTP (illustrative) | Notes |
-|-------|---------------------|-------|
-| `PushBack` | `POST` with body | Timeouts; retry only with idempotency |
-| `PopFront` | `GET` or `POST` pop | Map empty → `ErrEmpty`, not 500 |
-| Errors | Distinct from `ErrEmpty` | Connection refused ≠ empty deque |
+| Server op | HTTP | Notes |
+|-----------|------|-------|
+| `PushBack` | `POST /push` body | Max body size; copy bytes into deque |
+| `PopFront` | `GET /pop` | 200 + body; **204** if empty (not 500) |
+| Clients | `curl`, scripts, etc. | No `remote` package in repo |
 
 - Server process owns the **only** `MemoryDeque`.
-- Do not retry a pop blindly after timeout — delivery may be unknown.
+- HTTP “connection refused” is not the same as an empty deque.
 
 ## Production habits (when implementing)
 
@@ -60,4 +61,4 @@ README: **Ordering: strict FIFO vs concurrent workers**. Guide: §3.1.
 - Bound payload size; document whether returned `[]byte` is copied.
 - Use **`go test -race`** on memory package tests.
 
-When adding code, state **which lock**, **what error** (`ErrEmpty` vs `ErrClosed` vs wrap), and **whether** the deque is process-local or remote.
+When adding code, state **which lock**, **what error** (`ErrEmpty` vs `ErrClosed`), and **whether** the deque is in-process or behind HTTP.
