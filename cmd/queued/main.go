@@ -51,10 +51,36 @@ func (s *server) handlePush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Error", http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusO)
+	w.WriteHeader(http.StatusOK)
 }
 
 
 func (s *server) handlePop(w http.ResponseWriter, r *http.Request) {
 
+	payload, err := s.d.PopFront(r.Context())
+
+	if err != nil {
+		if errors.Is(err, dq.ErrEmpty) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if errors.Is(err, dq.ErrClosed) {
+			http.Error(w, "Server Closed", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, "Internal Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(payload)
+
+}
+
+func main() {
+	s := newServer()
+	mux := http.NewServeMux()
+	s.registerRoutes(mux)
+	log.Printf("listening on %s", addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
 }
