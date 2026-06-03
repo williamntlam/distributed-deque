@@ -7,7 +7,7 @@ alwaysApply: true
 
 Read `AGENTS.md` at the repo root for the full, maintained summary.
 
-**Topic rules:** `go-conventions.mdc` (Go files), `memory-patterns.mdc` (`memory/`, `cmd/`). **Learning doc:** `docs/deque-guide.md`.
+**Topic rules:** `go-conventions.mdc` (Go files), `memory-patterns.mdc` (`memory/`, `cmd/`). **Learning docs:** `docs/deque-guide.md`, `docs/distributed/` (strategy catalog — docs only).
 
 ## What this is
 

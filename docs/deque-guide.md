@@ -163,6 +163,9 @@ Async features will sit **above** sync push/pop — same `MemoryDeque` internals
 
 **Distributed** = multiple **processes** (or machines) share **one logical deque**.
 
+For a full catalog of race-condition strategies (OCC, event-loop shards, CAS, logs, CRDTs, partitioning) and how v1 fits in, see [`distributed/README.md`](distributed/README.md).
+
+
 The linked deque inside Worker A is invisible to Worker B. You need a **single owner**:
 
 ```

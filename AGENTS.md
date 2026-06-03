@@ -15,7 +15,7 @@ Last updated: 2026-05-29
 | **MemoryDeque** | Doubly-linked list + mutex in one process |
 | **cmd/queued** | Queue server — only owner of canonical deque; HTTP API |
 
-Full design: [`README.md`](README.md). Learning doc: [`docs/deque-guide.md`](docs/deque-guide.md).
+Full design: [`README.md`](README.md). Learning doc: [`docs/deque-guide.md`](docs/deque-guide.md). Distributed strategy catalog (docs only): [`docs/distributed/README.md`](docs/distributed/README.md).
 
 ---
 
@@ -100,3 +100,4 @@ The author is **building this library to learn**. Agents should default to **gui
 - Renamed `distributed-queue` → **distributed-deque**.
 - Docs: in-memory list first, then HTTP queue server (not Redis-first).
 - 2026-05-29: Removed `remote/` and `config.go`; distribution via `cmd/queued` + curl/HTTP only.
+- 2026-05-29: Added `docs/distributed/` — race-condition strategies and learning tracks (no implementation).

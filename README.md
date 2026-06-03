@@ -181,6 +181,25 @@ Append order = **broker timeline** (stable **within** a run; may vary **across**
 
 See [`docs/deque-guide.md`](docs/deque-guide.md) §3 (concurrency) and §5 (broker) for detail.
 
+### Avoiding race conditions without a distributed lock
+
+v1 uses a **central owner + in-process mutex** — a deliberate first step, not the only pattern used in industry. For a full catalog (optimistic concurrency, event-loop shards, CAS, append-only logs, CRDTs, partitioning) and how each relates to this repo:
+
+- **[`docs/distributed/README.md`](docs/distributed/README.md)** — index
+- **[`docs/distributed/race-condition-strategies.md`](docs/distributed/race-condition-strategies.md)** — all strategies + summary table
+- **[`docs/distributed/design-chooser.md`](docs/distributed/design-chooser.md)** — strict FIFO vs pub/sub / stream
+- **[`docs/distributed/this-project.md`](docs/distributed/this-project.md)** — what v1 implements vs future tracks
+
+| Strategy | When to use it | In this repo (v1) |
+|----------|----------------|-------------------|
+| Central mutex / single owner | Learning, one broker, strict FIFO | **`memory` + `cmd/queued`** |
+| Partitioning + event loop | High throughput per shard | Documented — [`tracks/03`](docs/distributed/tracks/03-single-threaded-shard.md) |
+| Append-only log | Streaming, replay | Documented — [`tracks/05`](docs/distributed/tracks/05-append-only-log.md) |
+| Atomic CAS / OCC | Claims on metadata store | Documented — [`tracks/02`](docs/distributed/tracks/02-optimistic-concurrency.md), [`04`](docs/distributed/tracks/04-atomic-cas.md) |
+| CRDTs | Eventual consistency, loose ordering | Documented — [`tracks/06`](docs/distributed/tracks/06-crds.md) |
+
+Distributed **mutexes** (Redlock, etc.) are discussed as a caution — not the default queue design. See the catalog for partition / split-brain notes.
+
 ### Waiting when empty
 
 | Approach | Behavior |
@@ -256,7 +275,22 @@ distributed-deque/
 │       └── main.go           # owns the only MemoryDeque; HTTP push/pop API
 │
 └── docs/
-    └── deque-guide.md
+    ├── deque-guide.md
+    └── distributed/              # design docs only (no implementation)
+        ├── README.md
+        ├── race-condition-strategies.md
+        ├── this-project.md
+        ├── design-chooser.md
+        ├── future-layout.md      # hypothetical code paths
+        └── tracks/               # per-strategy outlines (01–07)
+            ├── README.md
+            ├── 01-mutex-central-owner.md
+            ├── 02-optimistic-concurrency.md
+            ├── 03-single-threaded-shard.md
+            ├── 04-atomic-cas.md
+            ├── 05-append-only-log.md
+            ├── 06-crds.md
+            └── 07-partitioning.md
 ```
 
 | Path | Package | Role |
@@ -281,7 +315,7 @@ distributed-deque/
 6. **`cmd/queued`** — queue server owning one deque; test with `curl`.
 7. **`memory/ring.go` (later)** — ring-buffer optimization.
 
-Deep dive: [`docs/deque-guide.md`](docs/deque-guide.md).
+Deep dive: [`docs/deque-guide.md`](docs/deque-guide.md). Distributed strategies: [`docs/distributed/README.md`](docs/distributed/README.md).
 
 ---
 
