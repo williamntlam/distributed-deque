@@ -192,13 +192,50 @@ v1 uses a **central owner + in-process mutex** — a deliberate first step, not 
 
 | Strategy | When to use it | In this repo (v1) |
 |----------|----------------|-------------------|
-| Central mutex / single owner | Learning, one broker, strict FIFO | **`memory` + `cmd/queued`** |
-| Partitioning + event loop | High throughput per shard | Documented — [`tracks/03`](docs/distributed/tracks/03-single-threaded-shard.md) |
-| Append-only log | Streaming, replay | Documented — [`tracks/05`](docs/distributed/tracks/05-append-only-log.md) |
-| Atomic CAS / OCC | Claims on metadata store | Documented — [`tracks/02`](docs/distributed/tracks/02-optimistic-concurrency.md), [`04`](docs/distributed/tracks/04-atomic-cas.md) |
+| Central mutex / single owner | Learning, one broker, strict FIFO | **Implemented** — [`tracks/01`](docs/distributed/tracks/01-mutex-central-owner.md), `memory/`, `cmd/queued` |
+| Optimistic concurrency (OCC) | Rare per-row contention, versioned claims | Documented — [`tracks/02`](docs/distributed/tracks/02-optimistic-concurrency.md) |
+| Single-threaded shard / event loop | High per-shard throughput | Documented — [`tracks/03`](docs/distributed/tracks/03-single-threaded-shard.md) |
+| Atomic CAS | Fine-grained claims on external store | Documented — [`tracks/04`](docs/distributed/tracks/04-atomic-cas.md) |
+| Append-only log | Streaming, replay, fan-out | Documented — [`tracks/05`](docs/distributed/tracks/05-append-only-log.md) |
 | CRDTs | Eventual consistency, loose ordering | Documented — [`tracks/06`](docs/distributed/tracks/06-crds.md) |
+| Partitioning | Scale past one mutex; order per key | Documented — [`tracks/07`](docs/distributed/tracks/07-partitioning.md) |
 
 Distributed **mutexes** (Redlock, etc.) are discussed as a caution — not the default queue design. See the catalog for partition / split-brain notes.
+
+### Coordination strategy lab — implement each track, then benchmark
+
+Optional advanced path: build a **minimal prototype** for each [learning track](docs/distributed/tracks/README.md), run the **same workloads** where comparison is fair, and record throughput/latency so trade-offs are measurable — not only conceptual.
+
+| # | Track | Status | Experiment sketch | What to time |
+|---|--------|--------|-------------------|--------------|
+| 01 | [Mutex + central owner](docs/distributed/tracks/01-mutex-central-owner.md) | **Implemented** | `memory/deque.go`, `cmd/queued` — baseline | `go test -bench` on `MemoryDeque`; HTTP load on `queued` |
+| 02 | [Optimistic concurrency](docs/distributed/tracks/02-optimistic-concurrency.md) | Planned | Versioned lease table beside deque; claim without holding deque lock during handler work | Claim ops/sec; **retry rate** when workers collide |
+| 03 | [Single-threaded shard](docs/distributed/tracks/03-single-threaded-shard.md) | Planned | Channel of ops → **one goroutine** owns deque per shard (same FIFO semantics, no mutex on nodes) | Per-shard throughput vs Track 01 mutex |
+| 04 | [Atomic CAS](docs/distributed/tracks/04-atomic-cas.md) | Planned | Conditional claim (`WHERE status='AVAILABLE'` or in-memory CAS for tests) | CAS success vs failure under N workers |
+| 05 | [Append-only log](docs/distributed/tracks/05-append-only-log.md) | Planned | Separate module: append records; consumers advance offset (see [`future-layout.md`](docs/distributed/future-layout.md)) | Append ingest rate; offset commit contention |
+| 06 | [CRDTs](docs/distributed/tracks/06-crds.md) | Planned | CRDT counter/set **beside** queue — not strict global FIFO | Merge/converge time; compare on supported ops only |
+| 07 | [Partitioning](docs/distributed/tracks/07-partitioning.md) | Planned | `hash(key) % N` → N deques or N `queued` instances with routing | Aggregate throughput; **hot partition** behavior |
+
+**Suggested build order:** 01 (baseline numbers first) → 02–04 (coordination styles) → 05–06 (different data models) → 07 (scale). Finish one track, add benchmarks, save results, then move on.
+
+**Benchmark scenarios** (reuse across tracks that hand work to workers):
+
+| Scenario | Purpose |
+|----------|---------|
+| **Independent jobs** | Many workers, different messages/rows — low contention (OCC/CAS should win on claim latency) |
+| **Hot key / hot shard** | All workers fight one row or partition — measure retries and tail latency |
+| **Strict FIFO (Mode A)** | One producer, one consumer — correctness baseline, not max throughput |
+| **Multi-process** | `cmd/queued` or per-shard servers + parallel HTTP clients (`curl`, `hey`, `wrk`) |
+
+**Metrics to record:** throughput (ops/sec or jobs/sec), p50/p99 latency, failed claims / retries (OCC & CAS), and hardware notes (`GOMAXPROCS`, machine). Keep a simple results log (e.g. `docs/distributed/benchmarks.md` when you have numbers).
+
+**Fair comparison notes:**
+
+- **CRDTs** and **append-only logs** target different problems than an in-memory deque — benchmark the workload they actually solve (metrics merge, replay/stream), not only `PopFront` nanoseconds.
+- **Partitioning** raises total throughput by adding shards; it does not preserve global order across keys.
+- HTTP-based tracks include network overhead that in-process `go test -bench` skips — label results accordingly.
+
+Hypothetical package layout per track: [`docs/distributed/future-layout.md`](docs/distributed/future-layout.md).
 
 ### Waiting when empty
 
@@ -314,6 +351,7 @@ distributed-deque/
 5. **Mode B concurrency test** — `TestConcurrentPushPop`; `go test -race ./memory/...`.
 6. **`cmd/queued`** — queue server owning one deque; test with `curl`.
 7. **`memory/ring.go` (later)** — ring-buffer optimization.
+8. **(Optional) Coordination strategy lab** — implement tracks [02–07](docs/distributed/tracks/README.md) one at a time; benchmark each against Track 01 baseline (see [Coordination strategy lab](#coordination-strategy-lab--implement-each-track-then-benchmark)).
 
 Deep dive: [`docs/deque-guide.md`](docs/deque-guide.md). Distributed strategies: [`docs/distributed/README.md`](docs/distributed/README.md).
 
@@ -329,6 +367,7 @@ Deep dive: [`docs/deque-guide.md`](docs/deque-guide.md). Distributed strategies:
 6. Documented non-goals: exactly-once, built-in priority scheduler, Redis backend in v1
 7. **(Later)** Ring-buffer `MemoryDeque` variant for allocation/cache tradeoffs
 8. **(Later)** Optional async client helpers and blocking pop (see [Sync API now, async later](#sync-api-now-async-later-planned))
+9. **(Later)** Coordination strategy lab — minimal implementation + benchmarks per [track](docs/distributed/tracks/README.md) (02–07)
 
 ---
 
